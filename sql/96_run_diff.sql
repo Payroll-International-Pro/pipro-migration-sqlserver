@@ -107,7 +107,8 @@ WITH counts AS (
             AND mb.bank         = ma.bank
             AND mb.ordinal_no   = ma.ordinal_no
           WHERE NOT EXISTS (SELECT 1 FROM compare.promoted_ordinal p
-                             WHERE p.bank       = COALESCE(ma.bank, mb.bank)
+                             WHERE p.payroll    = compare.code_payroll(COALESCE(ma.employee_code, mb.employee_code))
+                               AND p.bank       = COALESCE(ma.bank, mb.bank)
                                AND p.ordinal_no = COALESCE(ma.ordinal_no, mb.ordinal_no))
             AND (ma.snap IS NULL OR mb.snap IS NULL
                  OR ma.value_num IS DISTINCT FROM mb.value_num

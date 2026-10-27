@@ -145,6 +145,9 @@ JOIN (
     CROSS JOIN LATERAL (VALUES ('gross', s.gi_code), ('paye', s.tax_code), ('net', s.net_code))
         AS t(metric, ordinal_no)
     WHERE s.currency = 1                      -- CHOOSE: default-currency totals only
+      -- a multi-payroll tenant holds one row per payroll: this export's payroll,
+      -- read from the staged run (one legacy database = one payroll)
+      AND s.payroll = (SELECT min(r.payroll) FROM compare.legacy_runf_amts r WHERE r.kind = :'kind')
 ) p ON p.ordinal_no = v.ordinal_no
 WHERE v.snap = :'snap' AND v.bank = 'Q' AND :'system' = 'legacy'
 ON CONFLICT DO NOTHING;
@@ -165,6 +168,28 @@ WHERE :'system' = 'pipro' AND :'kind' = 'validation'
   AND p.period_id = NULLIF(:'period_id','')::int
   AND p.status <> 'excluded'
 ON CONFLICT DO NOTHING;
+
+-- PAYE for a validation run, from the ZA pack's preview child (written by the
+-- engine-lane preview, payroll-za 2026_10_22_090000). Guarded: a tenant without
+-- the table, or a preview from the per-employee lane, simply has no PAYE total.
+SELECT set_config('mig95.snap', :'snap', true), set_config('mig95.tenant', :'tenant_schema', true),
+       set_config('mig95.period', COALESCE(NULLIF(:'period_id', ''), '0'), true),
+       set_config('mig95.system', :'system', true), set_config('mig95.kind', :'kind', true) \g /dev/null
+DO $$
+BEGIN
+    IF current_setting('mig95.system') = 'pipro' AND current_setting('mig95.kind') = 'validation'
+       AND to_regclass(current_setting('mig95.tenant') || '.payslip_statutory_za_previews') IS NOT NULL THEN
+        EXECUTE format($q$
+            INSERT INTO compare.run_total (snap, employee_code, metric, value_num, origin)
+            SELECT $1, m.employee_code, 'paye', z.paye_minor::numeric / 100, 'payslip_statutory_za_previews'
+              FROM %1$I.payslip_core_previews p
+              JOIN %1$I.payslip_statutory_za_previews z ON z.period_id = p.period_id AND z.employee_id = p.employee_id
+              JOIN compare.employee_map m ON m.tenant_schema = $2 AND m.pipro_user_id = p.employee_id
+             WHERE p.period_id = $3 AND p.status <> 'excluded'
+            ON CONFLICT DO NOTHING$q$, current_setting('mig95.tenant'))
+        USING current_setting('mig95.snap'), current_setting('mig95.tenant'), current_setting('mig95.period')::int;
+    END IF;
+END $$;
 
 -- Totals, live kind: committed payslips, with PAYE from the ZA statutory row.
 INSERT INTO compare.run_total (snap, employee_code, metric, value_num, origin)

@@ -54,23 +54,26 @@ LANGUAGE sql IMMUTABLE AS $fn$
     SELECT CASE WHEN code ~ '^[0-9]+/' THEN split_part(code, '/', 1)::int END
 $fn$;
 
--- CASCADE because the diff views (compare.value_diff, compare.run_value_diff)
--- reference this table. They are recreated by 92 and 96 with CREATE OR REPLACE,
--- which both report scripts run after this one, so the drop is safe - but a
--- hand-written query against those views between the two steps will not find
--- them. Re-run 92/96.
-DROP TABLE IF EXISTS compare.promoted_ordinal CASCADE;
-CREATE TABLE compare.promoted_ordinal (
+-- ONE SET PER PAYROLL, KEPT. Each export replaces only the payroll(s) it staged,
+-- so a multi-payroll tenant holds every payroll's promoted slots at once and the
+-- run report's master gate (96) can read any of them. (It used to be dropped and
+-- rebuilt from the last export alone, which also dropped the diff views that
+-- depend on it.)
+CREATE TABLE IF NOT EXISTS compare.promoted_ordinal (
     payroll        INTEGER NOT NULL,
     bank           CHAR(1) NOT NULL,
     ordinal_no     INTEGER NOT NULL,
     legacy_name    TEXT,
     target_column  TEXT NOT NULL,
     -- The system-neutral name compare.employee_promoted files the value under.
-    field          TEXT NOT NULL,
+    field          TEXT,
     rows_in_legacy INTEGER,
     PRIMARY KEY (payroll, bank, ordinal_no)
 );
+-- CREATE TABLE IF NOT EXISTS never adds a column to an existing table.
+ALTER TABLE compare.promoted_ordinal ADD COLUMN IF NOT EXISTS field TEXT;
+DELETE FROM compare.promoted_ordinal
+ WHERE payroll IN (SELECT payroll FROM compare.legacy_promoted);
 
 INSERT INTO compare.promoted_ordinal (payroll, bank, ordinal_no, legacy_name, target_column, field)
 SELECT p.payroll, 'V', p.sex_ind,
