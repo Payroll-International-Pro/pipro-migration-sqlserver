@@ -93,4 +93,18 @@ foreach ($row in $rows) {
         }
     }
 }
+# --- Once per tenant, after every payroll: steps that need all its payrolls -------
+# 65: payslip line labels from the tenant's own catalogue, checked against every
+# payroll's payslip layout.
+$tenantScripts = @('sql/65_payslip_line_settings.sql') | ForEach-Object { Join-Path $here $_ }
+foreach ($slug in ($rows | ForEach-Object { $_.Split('|')[2] } | Sort-Object -Unique)) {
+    Write-Host "==> tenant_$slug (all payrolls)" -ForegroundColor Cyan
+    foreach ($script in $tenantScripts) {
+        Get-Content $script -Raw | docker @PG -v ("tenant_slug=" + $slug) -v ("tenant_schema=tenant_" + $slug)
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "==> FAILED on tenant_$slug / $(Split-Path $script -Leaf) (rolled back). Fix and re-run.`n" -ForegroundColor Red
+            exit 1
+        }
+    }
+}
 Write-Host "`n==> All tenants populated." -ForegroundColor Green

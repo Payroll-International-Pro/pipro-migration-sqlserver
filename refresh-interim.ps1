@@ -175,7 +175,7 @@ function Sync-Schema {
     cmd /c "docker cp `"$postFile`" ${dockerContainer}:/tmp/post-$Source.sql >nul 2>&1"
     if ($LASTEXITCODE -ne 0) { Write-Host "    docker cp failed. Nothing was changed." -ForegroundColor Red; return $false }
 
-    docker exec $dockerContainer sh -c @"
+    $restoreScript = @"
 set -e
 sed -i '$stripExpr' /tmp/interim-$Source.sql
 cat /tmp/pre-$Source.sql /tmp/interim-$Source.sql /tmp/post-$Source.sql > /tmp/restore-$Source.sql
@@ -184,6 +184,9 @@ export PGPASSWORD=$dockerPassword
 psql -U $dockerUser -d $dockerDb -v ON_ERROR_STOP=on -q --single-transaction -f /tmp/restore-$Source.sql
 rm -f /tmp/interim-$Source.sql /tmp/restore-$Source.sql
 "@
+    # .gitattributes checks .ps1 files out with CRLF, and sh reads the CR as part of
+    # each command ("set: line 0: illegal option -"), so the script goes in LF-only.
+    docker exec $dockerContainer sh -c ($restoreScript -replace "`r", "")
     if ($LASTEXITCODE -ne 0) {
         Write-Host "    Restore failed - the transaction rolled back, so $Target is unchanged." -ForegroundColor Red
         Write-Host "    If the error names an unrecognized configuration parameter, add it to" -ForegroundColor Yellow
