@@ -12,7 +12,7 @@ rem     - removes the client's imported legacy calc program (calc_program
 rem       'legacy:*' rows)
 rem     - removes the login users the import minted for this tenant's employees
 rem       (public.pipro_core_users), and this tenant's migration staging rows
-rem  and KEEPS the seven configuration tables provisioning created (payrolls,
+rem  and KEEPS the eight configuration tables provisioning created (payrolls,
 rem  leave types, holidays, code catalogue, payslip settings, the module
 rem  migration ledger, the country pack's own calc program).
 rem

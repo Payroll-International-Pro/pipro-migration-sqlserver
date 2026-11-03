@@ -138,7 +138,7 @@ if ($SkipReset) {
     Write-Host ""
     Write-Host "---------------------------------------------------------------------------" -ForegroundColor Yellow
     Write-Host " RESET $tenantSchema - empties every employee- and run-scoped table," -ForegroundColor Yellow
-    Write-Host " removes the login users this import minted, and keeps the seven" -ForegroundColor Yellow
+    Write-Host " removes the login users this import minted, and keeps the eight" -ForegroundColor Yellow
     Write-Host " configuration tables provisioning created. Not reversible." -ForegroundColor Yellow
     Write-Host " It runs ONCE for the tenant, before any payroll." -ForegroundColor Yellow
     Write-Host "---------------------------------------------------------------------------" -ForegroundColor Yellow

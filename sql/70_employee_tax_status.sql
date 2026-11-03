@@ -27,22 +27,31 @@ FROM :"legacy_company_schema".employees \gset
 BEGIN;
 SET search_path TO :"tenant_schema", public;
 
-INSERT INTO employee_tax_status (
-    employee_id, resident, dependent_count, disability, age_band,
+-- payroll-core 2026_10_28_100200 replaced hrm-core's employee_tax_status with
+-- jurisdiction_tax_profiles: one profile per (employee, country), the ZA fields
+-- as a JSON object of strings, exactly as that migration copied the old rows.
+-- Written as plaintext: the readers decrypt only an encrypted value
+-- (ColumnEncrypter::decryptIfEncrypted) and hrm-core's encryption backfill
+-- job encrypts it at rest.
+INSERT INTO jurisdiction_tax_profiles (
+    employee_id, country_code, resident, tax_reference, fields,
     effective_from, recorded_at, created_by_user_id)
 SELECT
     e.user_id,
-    CASE WHEN COALESCE(NULLIF(upper(s.taxcountrycode_f14), ''), 'ZAF') IN ('ZA','ZAF') THEN 1 ELSE 0 END,
-    LEAST(50, GREATEST(0, COALESCE(s.taxdependants_f08, 0))),
-    0,
-    'derived',
+    'ZA',
+    CASE WHEN COALESCE(NULLIF(upper(s.taxcountrycode_f14), ''), 'ZAF') IN ('ZA','ZAF') THEN '1' ELSE '0' END,
+    NULL,
+    json_build_object(
+        'dependent_count', LEAST(50, GREATEST(0, COALESCE(s.taxdependants_f08, 0)))::text,
+        'disability', '0',
+        'age_band', 'derived')::text,
     s.engagedate_d931::text,
     :'cutover', :system_user_id
 FROM :"legacy_company_schema".employees s
 -- via employee_code, as 10 builds it (EmployeeNo is unique only per payroll)
 JOIN employees e ON e.employee_code = :'payroll_number' || '/' || s.employeeid_f01::text
 WHERE NOT EXISTS (                                   -- idempotency
-    SELECT 1 FROM employee_tax_status t WHERE t.employee_id = e.user_id);
+    SELECT 1 FROM jurisdiction_tax_profiles t WHERE t.employee_id = e.user_id AND t.country_code = 'ZA');
 
 COMMIT;
 \echo 'Done (employee tax status):' :tenant_schema '<-' :legacy_company_schema

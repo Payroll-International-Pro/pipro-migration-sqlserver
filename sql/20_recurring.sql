@@ -157,8 +157,11 @@ ON CONFLICT (employee_id, ordinal_no) DO NOTHING;
 -- Salary display: employees.salary_current_minor = standing monthly gross
 -- (the sum of routed E lines). The basiccode ordinal is a CALC INPUT (owner
 -- 2026-08-01), never a display salary — see 10_employees Step 1 note.
+-- amount_minor and salary_current_minor are TEXT since hrm-core / payroll-core
+-- moved them to encrypted-at-rest columns; the rows this import just wrote are
+-- still plaintext digits (the encryption backfill job encrypts them later).
 UPDATE employees e SET salary_current_minor = COALESCE(
-    (SELECT sum(x.amount_minor) FROM employee_amount_earnings x WHERE x.employee_id = e.user_id), 0)
+    (SELECT sum(x.amount_minor::bigint) FROM employee_amount_earnings x WHERE x.employee_id = e.user_id), 0)::text
 WHERE e.id LIKE 'emp-%';
 
 -- Codetype not found (no catalogue row for the ordinal) → quarantine (an error).

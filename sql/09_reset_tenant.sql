@@ -50,6 +50,7 @@ DECLARE
         'payrolls',                 -- created through the app; target_payroll_id points at it
         'leave_types',              -- hrm-core seed
         'public_holidays',          -- country-pack seed
+        'public_holiday_generations', -- hrm-leave: which (country, year) public_holidays was filled for
         'payroll_code_catalogue',   -- country-pack seed
         'payslip_line_settings',    -- payslip presentation config
         'calc_program'              -- country-pack calculation program

@@ -2,7 +2,7 @@
 -- 10_employees.sql — the CORE employee record for one tenant, from one legacy
 -- source schema. Run ONCE PER TENANT. Creates, in dependency order:
 --   pipro_core_users → employees → employee_contracts
---                    → employee_payroll_assignments  (puts them in the run worklist)
+--                    → employment_payroll_allocations (puts them in the run worklist)
 --                    → employee_status_history        (payable gate)
 --
 -- Runner variables: :legacy_company_schema :legacy_payroll_schema
@@ -260,14 +260,19 @@ FROM _src s JOIN _idmap m ON m.legacy_empno = s.legacy_empno;
 -- codes (bursary stipends etc.) — matches how legacy represented them.
 
 -- ---------------------------------------------------------------------------
--- Step 5: employee_payroll_assignments — WITHOUT this the engine's worklist
+-- Step 5: employment_payroll_allocations — WITHOUT this the engine's worklist
 -- never sees the employee. payroll_id = the tenant payroll from the map.
+-- payroll-core 2026_10_28_100000 replaced employee_payroll_assignments (one
+-- payroll per employee) with these allocations; a legacy employee belongs to
+-- exactly one payroll, so the allocation is that payroll's whole share
+-- (mode 'split', 10000 bp = 100%), active from the hire date.
 -- ---------------------------------------------------------------------------
-INSERT INTO employee_payroll_assignments (
-    id, employee_id, payroll_id, effective_from, recorded_at, created_by_user_id)
+INSERT INTO employment_payroll_allocations (
+    employee_id, payroll_id, status, mode, default_share_bp, share_basis,
+    effective_from, recorded_at, created_by_user_id)
 SELECT
-    COALESCE((SELECT max(id) FROM employee_payroll_assignments), 0) + row_number() OVER (ORDER BY m.user_id),
-    m.user_id, :target_payroll_id, s.hired_at, :'cutover', :system_user_id
+    m.user_id, :target_payroll_id, 'active', 'split', 10000, 'default',
+    s.hired_at, :'cutover', :system_user_id
 FROM _src s JOIN _idmap m ON m.legacy_empno = s.legacy_empno;
 
 -- ---------------------------------------------------------------------------
