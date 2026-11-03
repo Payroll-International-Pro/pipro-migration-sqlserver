@@ -149,8 +149,10 @@ FROM (
            'employee_amount_employer_cost' AS origin
       FROM :"tenant_schema".employee_amount_employer_cost
     UNION ALL
-    -- B/T: ordinal-addressed, RAW 4dp (no /100 — see 20_recurring)
-    SELECT employee_id, ordinal_no, amount, 'employee_amount_balances'
+    -- B/T: ordinal-addressed, RAW 4dp (no /100 — see 20_recurring). TEXT since
+    -- hrm-core moved it to an encrypted-at-rest column; the import writes plain
+    -- digits, so the cast works (and fails loudly on an encrypted value).
+    SELECT employee_id, ordinal_no, amount::numeric, 'employee_amount_balances'
       FROM :"tenant_schema".employee_amount_balances
     UNION ALL
     -- H/S/J: ordinal-addressed, minor units
