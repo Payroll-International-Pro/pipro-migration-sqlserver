@@ -111,6 +111,7 @@ SELECT
     :'payroll_number' || '/' || e.employeeid_f01::text  AS employee_code,
     e.surname_f02                                    AS last_name,
     e.givennames_f21                                 AS first_name,
+    NULLIF(btrim(e.initials_f03), '')                AS initials,           -- legacy's own (bank-file references), not derived
     e.identity_f12::text                             AS id_number,
     -- Passport: promoted to F45 in hop 1 from the slot PW_Parm_IRP5NonFinancial.
     -- PassportRefNo points at. The country of issue is PW_ImfC.PassportCountry
@@ -125,7 +126,12 @@ SELECT
     e.occupation_f11                                 AS occupation,
     e.category_f13                                   AS category,
     'unspecified'                                      AS marital_status,
-    1                                                  AS currency,
+    -- The payroll's ISO currency. Was the literal 1: the interim system's currency
+    -- NUMBER (1 = main currency, settings_currency.currency_code1; a single-currency
+    -- payroll leaves settings_currency empty and just assumes 1). pipro keys
+    -- currencies by ISO code, so "1" read as a currency of its own and blocked every
+    -- run on a 1->ZAR exchange rate.
+    (SELECT p.currency FROM payrolls p WHERE p.id = :target_payroll_id) AS currency,
     upper(nullif(e.taxcountrycode_f14, ''))::char(3) AS nationality_country_code, -- there are two sets of country codes, one char(2) & one char(3)
     CASE upper(left(coalesce(e.gender_f22,''),1)) WHEN 'M' THEN 'male' WHEN 'F' THEN 'female' ELSE 'unspecified' END AS gender,
     -- Synthesised when F40 is blank, and QUALIFIED BY PAYROLL for the same reason
@@ -225,12 +231,12 @@ INSERT INTO employees (
     id, user_id, employee_code, first_name, last_name, id_number,
     hired_at, terminated_at, salary_current_minor, currency, created_at,
     date_of_birth, gender, title, nationality_country_code, marital_status, preferred_name,
-    occupation, category, passport_number, passport_country_code)
+    occupation, category, passport_number, passport_country_code, initials)
 SELECT
     'emp-' || :'payroll_number' || '-' || s.legacy_empno, m.user_id, s.employee_code, s.first_name, s.last_name,
     s.id_number, s.hired_at, s.terminated_at, 0, s.currency,   -- salary display set by 20_recurring
     :'cutover', s.date_of_birth, s.gender, s.title, s.nationality_country_code,
-    s.marital_status, NULL, s.occupation, s.category, s.passport_number, s.passport_country_code
+    s.marital_status, NULL, s.occupation, s.category, s.passport_number, s.passport_country_code, s.initials
 FROM _src s JOIN _idmap m ON m.legacy_empno = s.legacy_empno
 ON CONFLICT (employee_code) DO NOTHING;
 

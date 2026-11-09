@@ -48,7 +48,10 @@ SELECT
     s.accountholderstatus_g7,
     CASE WHEN s.sarsbankaccount_g8 THEN 1 ELSE 0 END,
     s.accountiban_g9,
-    :'cutover', :'cutover', :system_user_id
+    -- effective_from: the hire date, not the cutover. Accounts are looked up as of
+    -- the payday, so stamping them with the conversion date hid every account
+    -- from the first open period (paydays before the day of the conversion).
+    COALESCE(NULLIF(e.hired_at, ''), :'cutover'), :'cutover', :system_user_id
 FROM :"legacy_company_schema".employee_accounts s
 -- via employee_code, as 10 builds it (EmployeeNo is unique only per payroll)
 JOIN :"legacy_company_schema".employees le ON le.employeeno = s.employeeno
